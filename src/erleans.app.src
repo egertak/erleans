@@ -13,7 +13,8 @@
     gproc,
     sbroker,
     erlware_commons,
-    opentelemetry_api]},
+    opentelemetry_api,
+    riakc]},
   {modules, []},
   {env, [{deactivate_after, 2700000}, %% 45 minutes
          {refresh_interval, 5000},
