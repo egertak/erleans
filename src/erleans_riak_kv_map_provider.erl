@@ -3,7 +3,6 @@
 -behaviour(erleans_provider).
 
 -export([start_link/2,
-  post_init/2,
   all/2,
   read/3,
   read_by_hash/3,
@@ -31,10 +30,7 @@ init([_ProviderName, ProviderArgs]) ->
   Port = proplists:get_value(port, ProviderArgs, undefined),
   put(port, Port),
 
-  ok.
-
-post_init(_ProviderName, _Args) ->
-  ok.
+  {ok, undefined}.
 
 all(Type, ProviderName) ->
   do(ProviderName, fun(C) -> all_(Type, C) end).
