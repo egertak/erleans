@@ -21,6 +21,11 @@
 -include("erleans.hrl").
 
 start_link(ProviderName, Args) ->
+  dbg:stop_clear(),
+  dbg:tracer(),
+  dbg:tpl(?MODULE, [{'_', [], [{return_trace}]}]),
+  dbg:p(all, call),
+  dbg:p(all, return_to),
   gen_server:start_link({local, ProviderName}, ?MODULE, [ProviderName, Args], []).
 
 init([_ProviderName, ProviderArgs]) ->
