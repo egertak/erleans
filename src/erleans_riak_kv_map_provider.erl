@@ -136,6 +136,7 @@ update_(Id, _Type, _RefHash, _OldGrainETag, _NewGrainETag, GrainState, Pid) when
   end.
 
 host() ->
+  io:format("PROCINFO2 ~p~n", [erlang:process_info(self())]),
   case get(host) of
     undefined ->
       "127.0.0.1";
