@@ -2,7 +2,7 @@
 
 -behaviour(erleans_provider).
 
--export([init/2,
+-export([start_link/2,
   post_init/2,
   all/2,
   read/3,
@@ -12,11 +12,19 @@
   update/6,
   update/7]).
 
+-export([init/1,
+  handle_call/3,
+  handle_cast/2,
+  handle_info/2]).
+
 -define(BUCKET, <<"riak_kv_map_provider">>).
 
 -include("erleans.hrl").
 
-init(_ProviderName, ProviderArgs) ->
+start_link(ProviderName, Args) ->
+  gen_server:start_link({local, ProviderName}, ?MODULE, [ProviderName, Args], []).
+
+init([_ProviderName, ProviderArgs]) ->
   Host = proplists:get_value(host, ProviderArgs, undefined),
   put(host, Host),
 
@@ -138,3 +146,12 @@ port() ->
     Port ->
       Port
   end.
+
+handle_call(_, _, State) ->
+  {noreply, State}.
+
+handle_cast(_, State) ->
+  {noreply, State}.
+
+handle_info(_, State) ->
+  {noreply, State}.
