@@ -1,6 +1,7 @@
 -module(erleans_riak_kv_map_provider).
 
 -behaviour(erleans_provider).
+-behaviour(gen_server).
 
 -export([start_link/2,
   all/2,
@@ -34,6 +35,8 @@ init([_ProviderName, ProviderArgs]) ->
 
   Port = proplists:get_value(port, ProviderArgs, undefined),
   put(port, Port),
+
+  io:format("PROCINFO ~p~n", [erlang:process_info(self())]),
 
   {ok, undefined}.
 
