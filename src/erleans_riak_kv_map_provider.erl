@@ -41,7 +41,7 @@ read(Type, ProviderName, Id) ->
     case read(Id, Type, erlang:phash2({Id, Type}), C) of
       {ok, {_, _, _, State}} ->
 
-        {ok, binary_to_term(State), erlang:phash2({Id, Type})};
+        {ok, State, erlang:phash2({Id, Type})};
       error ->
         not_found
     end
