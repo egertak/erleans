@@ -88,7 +88,8 @@ do(ProviderName, Fun, Retry) ->
   try
     Fun(Pid)
   catch
-    _:_Error ->
+    Type:Error ->
+      io:format("ERROR ~p~p~n", [Type, Error]),
       do(ProviderName, Fun, Retry - 1)
   end.
 
