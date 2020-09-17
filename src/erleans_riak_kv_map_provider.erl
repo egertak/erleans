@@ -22,11 +22,6 @@
 -include("erleans.hrl").
 
 start_link(ProviderName, Args) ->
-  dbg:stop_clear(),
-  dbg:tracer(),
-  dbg:tpl(?MODULE, [{'_', [], [{return_trace}]}]),
-  dbg:p(all, call),
-  dbg:p(all, return_to),
   gen_server:start_link({local, ProviderName}, ?MODULE, [ProviderName, Args], []).
 
 init([_ProviderName, ProviderArgs]) ->
@@ -72,7 +67,7 @@ do(ProviderName, Fun) ->
   do(ProviderName, Fun, 1).
 
 do(_ProviderName, _Fun, 0) ->
-  lager:error("Failed to obtain database connection"),
+  io:format("Failed to obtain database connection", []),
   {error, no_db_connection};
 do(ProviderName, Fun, Retry) ->
   Pid = case persistent_term:get({?MODULE, pid}, undefined) of
