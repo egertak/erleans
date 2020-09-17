@@ -76,8 +76,8 @@ do(ProviderName, Fun, Retry) ->
             persistent_term:put({?MODULE, pid}, Pid1),
             Pid1;
           Pid1 ->
-            case riakc_pb_socket:ping(Pid1) of
-              pong -> Pid1;
+            case is_process_alive(Pid1) of
+              true -> Pid1;
               _ ->
                 {ok, Pid2} = riakc_pb_socket:start_link(host(), port()),
                 persistent_term:put({?MODULE, pid}, Pid2),
