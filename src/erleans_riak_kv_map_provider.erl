@@ -40,6 +40,7 @@ read(Type, ProviderName, Id) ->
   do(ProviderName, fun(C) ->
     case read(Id, Type, erlang:phash2({Id, Type}), C) of
       {ok, {_, _, _, State}} ->
+
         {ok, binary_to_term(State), erlang:phash2({Id, Type})};
       error ->
         not_found
@@ -102,7 +103,7 @@ read(Id, Type, RefHash, Pid) ->
     {ok, O1} ->
       %% Starting with an empty map, construct the map based on the raw values.
       State = riakc_map:fold(
-        fun(Key, Value, Acc) -> Acc#{Key => binary_to_term(Value)} end,
+        fun({Key, register}, Value, Acc) -> Acc#{binary_to_term(Key) => binary_to_term(Value)} end,
         #{}, O1),
       {ok, {Id, Type, RefHash, State}};
     _ ->
