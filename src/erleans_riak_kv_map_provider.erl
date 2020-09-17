@@ -31,12 +31,10 @@ start_link(ProviderName, Args) ->
 
 init([_ProviderName, ProviderArgs]) ->
   Host = proplists:get_value(host, ProviderArgs, undefined),
-  put(host, Host),
+  persistent_term:put({?MODULE, host}, Host),
 
   Port = proplists:get_value(port, ProviderArgs, undefined),
-  put(port, Port),
-
-  io:format("PROCINFO ~p~n", [erlang:process_info(self())]),
+  persistent_term:put({?MODULE, port}, Port),
 
   {ok, undefined}.
 
@@ -77,10 +75,10 @@ do(_ProviderName, _Fun, 0) ->
   lager:error("Failed to obtain database connection"),
   {error, no_db_connection};
 do(ProviderName, Fun, Retry) ->
-  Pid = case get(pid) of
+  Pid = case persistent_term:get({?MODULE, pid}, undefined) of
           undefined ->
             {ok, Pid1} = riakc_pb_socket:start_link(host(), port()),
-            put(pid, Pid1),
+            persistent_term:put({?MODULE, pid}, Pid1),
             Pid1;
           Pid1 ->
             Pid1
@@ -136,8 +134,7 @@ update_(Id, _Type, _RefHash, _OldGrainETag, _NewGrainETag, GrainState, Pid) when
   end.
 
 host() ->
-  io:format("PROCINFO2 ~p~n", [erlang:process_info(self())]),
-  case get(host) of
+  case persistent_term:get({?MODULE, host}, undefined) of
     undefined ->
       "127.0.0.1";
     Host ->
@@ -145,7 +142,7 @@ host() ->
   end.
 
 port() ->
-  case get(port) of
+  case persistent_term:get({?MODULE, port}, undefined) of
     undefined ->
       8087;
     Port ->
