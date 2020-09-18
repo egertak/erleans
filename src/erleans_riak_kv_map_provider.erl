@@ -80,7 +80,7 @@ do(ProviderName, Fun, Retry) ->
             case is_process_alive(Pid1) of
               true -> Pid1;
               _ ->
-                {ok, Pid2} = riakc_pb_socket:start_link(host(), port()),
+                {ok, Pid2} = riakc_pb_socket:start(host(), port()),
                 persistent_term:put({?MODULE, pid}, Pid2),
                 Pid2
             end
