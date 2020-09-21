@@ -406,7 +406,9 @@ maybe_unregister(GrainRef) ->
     erleans_pm:unregister_name(GrainRef, self()),
     try gproc:unreg(?stateful(GrainRef))
     catch
-      error:badarg -> ok
+      error:badarg ->
+        Warning = io_lib:format("Attempted to unregister grain, but was unknown by gproc: ~p", [GrainRef]),
+        error_logger:warning_report(Warning)
     end,
     ok.
 
