@@ -404,7 +404,11 @@ maybe_unregister(#{placement := {stateless, _}}) ->
     ok;
 maybe_unregister(GrainRef) ->
     erleans_pm:unregister_name(GrainRef, self()),
-    gproc:unreg(?stateful(GrainRef)).
+    try gproc:unreg(?stateful(GrainRef))
+    catch
+      error:badarg -> ok
+    end,
+    ok.
 
 upd_timer(leave_timer, _) ->
     [];
