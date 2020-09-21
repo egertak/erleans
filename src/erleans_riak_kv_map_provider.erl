@@ -129,11 +129,11 @@ update_(Id, _Type, _RefHash, _OldGrainETag, _NewGrainETag, GrainState, Pid) when
       case riakc_pb_socket:update_type(Pid, {<<"maps">>, ?BUCKET}, IdBin, riakc_map:to_op(O2)) of
         ok ->
           ok;
-        _ ->
-          error
+        Error ->
+          {error, {"update_type failure", Error}}
       end;
-    _ ->
-      error
+    Error ->
+      {error, {"fetch_type failure", Error}}
   end.
 
 host() ->
