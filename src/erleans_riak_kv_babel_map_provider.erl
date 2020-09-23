@@ -17,14 +17,25 @@
   handle_cast/2,
   handle_info/2]).
 
--define(BUCKET, <<"riak_kv_map_provider">>).
+-define(TYPE, <<"index_data">>).
+-define(BUCKET, <<"riak_kv_babel_map_provider">>).
 
 -include("erleans.hrl").
+
+enable_trace() ->
+  dbg:stop_clear(),
+  dbg:tracer(),
+  dbg:tpl(erleans_grain, [{'_', [], [{return_trace}]}]),
+  dbg:tpl(door_grain, [{'_', [], [{return_trace}]}]),
+  dbg:tpl(?MODULE, [{'_', [], [{return_trace}]}]),
+  dbg:p(all, call),
+  dbg:p(all, return_to).
 
 start_link(ProviderName, Args) ->
   gen_server:start_link({local, ProviderName}, ?MODULE, [ProviderName, Args], []).
 
 init([_ProviderName, ProviderArgs]) ->
+  enable_trace(),
   Host = proplists:get_value(host, ProviderArgs, undefined),
   persistent_term:put({?MODULE, host}, Host),
 
@@ -65,33 +76,17 @@ update(Type, ProviderName, Id, Hash, State, OldETag, NewETag) ->
 %%%
 
 do(ProviderName, Fun) ->
-  do(ProviderName, Fun, 1).
+  do(ProviderName, Fun, undefined, 1).
 
-do(_ProviderName, _Fun, 0) ->
-  io:format("Failed to obtain database connection", []),
-  {error, no_db_connection};
-do(ProviderName, Fun, Retry) ->
-  Pid = case persistent_term:get({?MODULE, pid}, undefined) of
-          undefined ->
-            {ok, Pid1} = riakc_pb_socket:start_link(host(), port()),
-            persistent_term:put({?MODULE, pid}, Pid1),
-            Pid1;
-          Pid1 ->
-            case is_process_alive(Pid1) of
-              true -> Pid1;
-              _ ->
-                {ok, Pid2} = riakc_pb_socket:start(host(), port()),
-                persistent_term:put({?MODULE, pid}, Pid2),
-                Pid2
-            end
-        end,
-
+do(_ProviderName, _Fun, LastError, 0) ->
+  {error, {"database update failure", LastError}};
+do(ProviderName, Fun, _LastError, Retry) ->
+  Pid = babel_get_socket(),
   try
     Fun(Pid)
   catch
     Type:Error ->
-      io:format("ERROR ~p~p~n", [Type, Error]),
-      do(ProviderName, Fun, Retry - 1)
+      do(ProviderName, Fun, {Type, Error}, Retry - 1)
   end.
 
 all_(_Type, _C) ->
@@ -99,13 +94,9 @@ all_(_Type, _C) ->
 
 read(Id, Type, RefHash, Pid) ->
   IdBin = term_to_binary(Id),
-  case riakc_pb_socket:fetch_type(Pid, {<<"maps">>, ?BUCKET}, IdBin) of
-    {ok, O1} ->
-      %% Starting with an empty map, construct the map based on the raw values.
-      State = riakc_map:fold(
-        fun({Key, register}, Value, Acc) -> Acc#{binary_to_term(Key) => binary_to_term(Value)} end,
-        #{}, O1),
-      {ok, {Id, Type, RefHash, State}};
+  case babel_get(IdBin, Pid) of
+    {ok, BabelMap} ->
+      {ok, {Id, Type, RefHash, BabelMap}};
     _ ->
       error
   end.
@@ -118,22 +109,43 @@ insert_(Id, Type, RefHash, GrainETag, GrainState, Pid) when is_map(GrainState) -
 
 update_(Id, _Type, _RefHash, _OldGrainETag, _NewGrainETag, GrainState, Pid) when is_map(GrainState) ->
   IdBin = term_to_binary(Id),
-  case riakc_pb_socket:fetch_type(Pid, {<<"maps">>, ?BUCKET}, IdBin) of
-    {ok, O1} ->
+  case babel_get(IdBin, Pid) of
+    {ok, BabelMap0} ->
       %% For now, shallow iteration.
-      O2 = maps:fold(fun(K, V, O) ->
-        riakc_map:update({term_to_binary(K), register}, fun(R) ->
-          riakc_register:set(term_to_binary(V), R) end, O)
-                     end, O1, GrainState),
+      BabelMap = maps:fold(fun(K, V, Acc) ->
+                             babel_map:set(K, V, Acc)
+                           end, BabelMap0, GrainState),
 
-      case riakc_pb_socket:update_type(Pid, {<<"maps">>, ?BUCKET}, IdBin, riakc_map:to_op(O2)) of
+      case babel_put(IdBin, BabelMap, Pid) of
         ok ->
           ok;
         Error ->
-          {error, {"update_type failure", Error}}
+          {error, {"babel_put failure", Error}}
       end;
     Error ->
-      {error, {"fetch_type failure", Error}}
+      {error, {"babel_get failure", Error}}
+  end.
+
+babel_get(IdBin, Pid) ->
+  babel:get({?TYPE, ?BUCKET}, IdBin, get_spec(), #{connection => Pid}).
+
+babel_put(IdBin, BabelMap, Pid) ->
+  babel:put({?TYPE, ?BUCKET}, IdBin, BabelMap, get_spec(), #{connection => Pid}).
+
+babel_get_socket() ->
+  case persistent_term:get({?MODULE, pid}, undefined) of
+    undefined ->
+      {ok, Pid1} = riakc_pb_socket:start(host(), port()),
+      persistent_term:put({?MODULE, pid}, Pid1),
+      Pid1;
+    Pid1 ->
+      case is_process_alive(Pid1) of
+        true -> Pid1;
+        _ ->
+          {ok, Pid2} = riakc_pb_socket:start(host(), port()),
+          persistent_term:put({?MODULE, pid}, Pid2),
+          Pid2
+      end
   end.
 
 host() ->
@@ -151,6 +163,24 @@ port() ->
     Port ->
       Port
   end.
+
+get_spec() ->
+  %%TBD where to store and get the spec from,
+  %%now let's hardcode something here
+  NotifSpec = #{
+    <<"push_notifications_enabled">> => {flag, boolean}
+  },
+  PrefSpec = #{
+    <<"notifications">> => {map, NotifSpec}
+  },
+  Spec = #{
+    <<"first_name">> => {register, binary},
+    <<"last_name">> => {register, binary},
+    <<"phone_number">> => {register, binary},
+    <<"age">> => {register, integer},
+    <<"preferences">> => {map, PrefSpec}},
+  Spec.
+
 
 handle_call(_, _, State) ->
   {noreply, State}.
