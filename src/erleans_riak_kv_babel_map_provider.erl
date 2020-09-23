@@ -5,7 +5,7 @@
 
 -export([start_link/2,
   all/2,
-  read/4,
+  read/3,
   read_by_hash/3,
   insert/5,
   insert/6,
