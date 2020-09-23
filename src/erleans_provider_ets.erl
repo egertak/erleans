@@ -5,7 +5,7 @@
 
 -export([start_link/2,
          all/2,
-         read/4,
+         read/3,
          read_by_hash/3,
          insert/5,
          insert/6,
@@ -29,7 +29,7 @@ all(Type, ProviderName) ->
             {error, missing_table}
     end.
 
-read(Type, ProviderName, Id, _State) ->
+read(Type, ProviderName, Id) ->
     case ets:lookup(ProviderName, Id) of
         [{Id, Type, _Hash, ETag, Object}] ->
             {ok, Object, ETag};

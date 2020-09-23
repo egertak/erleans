@@ -47,10 +47,10 @@ init([_ProviderName, ProviderArgs]) ->
 all(Type, ProviderName) ->
   do(ProviderName, fun(C) -> all_(Type, C) end).
 
-read(Type, ProviderName, Id, GrainState) ->
+read(Type, ProviderName, Id) ->
   do(ProviderName, fun(C) ->
                      case read(Id, Type,
-                               erlang:phash2({Id, Type}), C, GrainState) of
+                               erlang:phash2({Id, Type}), C) of
                        {ok, {_, _, _, NewGrainState}} ->
                          {ok, NewGrainState, erlang:phash2({Id, Type})};
                        error ->
@@ -92,11 +92,11 @@ do(ProviderName, Fun, _LastError, Retry) ->
 all_(_Type, _C) ->
   [].
 
-read(Id, Type, RefHash, Pid, _GrainState = {_BabelMap, Spec}) ->
+read(Id, Type, RefHash, Pid) ->
   IdBin = term_to_binary(Id),
-  case babel_get(IdBin, Spec, Pid) of
+  case babel_get(IdBin, Type:get_spec(), Pid) of
     {ok, BabelMap} ->
-      {ok, {Id, Type, RefHash, {BabelMap, Spec}}};
+      {ok, {Id, Type, RefHash, BabelMap}};
     _ ->
       error
   end.
@@ -107,9 +107,9 @@ read_by_hash_(_Hash, _Type, _C) ->
 insert_(Id, Type, RefHash, GrainETag, GrainState, Pid) ->
   update_(Id, Type, RefHash, GrainETag, GrainETag, GrainState, Pid).
 
-update_(Id, _Type, _RefHash, _OldGrainETag, _NewGrainETag, _GrainState = {NewBabelMap, Spec}, Pid) ->
+update_(Id, Type, _RefHash, _OldGrainETag, _NewGrainETag, NewGrainState, Pid) ->
   IdBin = term_to_binary(Id),
-  case babel_put(IdBin, NewBabelMap, Spec, Pid) of
+  case babel_put(IdBin, NewGrainState, Type:get_spec(), Pid) of
     ok ->
       ok;
     Error ->
