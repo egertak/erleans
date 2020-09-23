@@ -19,6 +19,7 @@
 
 -define(TYPE, <<"index_data">>).
 -define(BUCKET, <<"riak_kv_babel_map_provider">>).
+-define(DEFAULT_SPEC, #{'_' => {register, binary}}).
 
 -include("erleans.hrl").
 
@@ -94,7 +95,7 @@ all_(_Type, _C) ->
 
 read(Id, Type, RefHash, Pid) ->
   IdBin = term_to_binary(Id),
-  case babel_get(IdBin, Type:get_spec(), Pid) of
+  case babel_get(IdBin, get_spec(Type), Pid) of
     {ok, BabelMap} ->
       {ok, {Id, Type, RefHash, BabelMap}};
     _ ->
@@ -109,8 +110,10 @@ insert_(Id, Type, RefHash, GrainETag, GrainState, Pid) ->
 
 update_(Id, Type, _RefHash, _OldGrainETag, _NewGrainETag, NewGrainState, Pid) ->
   IdBin = term_to_binary(Id),
-  case babel_put(IdBin, NewGrainState, Type:get_spec(), Pid) of
+  case babel_put(IdBin, NewGrainState, get_spec(Type), Pid) of
     ok ->
+      ok;
+    {error, unmodified} ->
       ok;
     Error ->
       {error, {"babel_put failure", Error}}
@@ -153,6 +156,14 @@ port() ->
     Port ->
       Port
   end.
+
+get_spec(Type) ->
+  case erlang:function_exported(Type, get_spec, 0) of
+    true ->
+      Type:get_spec();
+    false ->
+      ?DEFAULT_SPEC
+    end.
 
 handle_call(_, _, State) ->
   {noreply, State}.
