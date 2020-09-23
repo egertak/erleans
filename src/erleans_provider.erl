@@ -24,7 +24,7 @@
 
 -callback all(Type :: module(), ProviderName :: atom()) -> {ok, [any()]} | {error, any()}.
 
--callback read(Type :: module(), ProviderName :: atom(), GrainRef :: erleans:grain_ref()) ->
+-callback read(Type :: module(), ProviderName :: atom(), GrainRef :: erleans:grain_ref(), State :: any()) ->
     {ok, State :: any(), ETag :: erleans:etag()} |
     {error, not_found}.
 

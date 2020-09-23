@@ -5,7 +5,7 @@
 
 -export([start_link/2,
   all/2,
-  read/3,
+  read/4,
   read_by_hash/3,
   insert/5,
   insert/6,
@@ -21,9 +21,6 @@
 -define(BUCKET, <<"riak_kv_babel_map_provider">>).
 
 -include("erleans.hrl").
-
--define(SPEC, #{<<"id">>    => {register, binary},
-                <<"state">> => {register, binary}}).
 
 enable_trace() ->
   dbg:stop_clear(),
@@ -50,31 +47,31 @@ init([_ProviderName, ProviderArgs]) ->
 all(Type, ProviderName) ->
   do(ProviderName, fun(C) -> all_(Type, C) end).
 
-read(Type, ProviderName, Id) ->
+read(Type, ProviderName, Id, GrainState) ->
   do(ProviderName, fun(C) ->
-    case read(Id, Type, erlang:phash2({Id, Type}), C) of
-      {ok, {_, _, _, State}} ->
-
-        {ok, State, erlang:phash2({Id, Type})};
-      error ->
-        not_found
-    end
+                     case read(Id, Type,
+                               erlang:phash2({Id, Type}), C, GrainState) of
+                       {ok, {_, _, _, NewGrainState}} ->
+                         {ok, NewGrainState, erlang:phash2({Id, Type})};
+                       error ->
+                         not_found
+                     end
                    end).
 
 read_by_hash(Type, ProviderName, Hash) ->
   do(ProviderName, fun(C) -> read_by_hash_(Hash, Type, C) end).
 
-insert(Type, ProviderName, Id, State, ETag) ->
-  insert(Type, ProviderName, Id, erlang:phash2({Id, Type}), State, ETag).
+insert(Type, ProviderName, Id, GrainState, ETag) ->
+  insert(Type, ProviderName, Id, erlang:phash2({Id, Type}), GrainState, ETag).
 
-insert(Type, ProviderName, Id, Hash, State, ETag) ->
-  do(ProviderName, fun(C) -> insert_(Id, Type, Hash, ETag, State, C) end).
+insert(Type, ProviderName, Id, Hash, GrainState, ETag) ->
+  do(ProviderName, fun(C) -> insert_(Id, Type, Hash, ETag, GrainState, C) end).
 
-update(Type, ProviderName, Id, State, OldETag, NewETag) ->
-  update(Type, ProviderName, Id, erlang:phash2({Id, Type}), State, OldETag, NewETag).
+update(Type, ProviderName, Id, GrainState, OldETag, NewETag) ->
+  update(Type, ProviderName, Id, erlang:phash2({Id, Type}), GrainState, OldETag, NewETag).
 
-update(Type, ProviderName, Id, Hash, State, OldETag, NewETag) ->
-  do(ProviderName, fun(C) -> update_(Id, Type, Hash, OldETag, NewETag, State, C) end).
+update(Type, ProviderName, Id, Hash, GrainState, OldETag, NewETag) ->
+  do(ProviderName, fun(C) -> update_(Id, Type, Hash, OldETag, NewETag, GrainState, C) end).
 
 %%%
 
@@ -95,11 +92,11 @@ do(ProviderName, Fun, _LastError, Retry) ->
 all_(_Type, _C) ->
   [].
 
-read(Id, Type, RefHash, Pid) ->
+read(Id, Type, RefHash, Pid, _GrainState = {_BabelMap, Spec}) ->
   IdBin = term_to_binary(Id),
-  case babel_get(IdBin, Pid) of
+  case babel_get(IdBin, Spec, Pid) of
     {ok, BabelMap} ->
-      {ok, {Id, Type, RefHash, BabelMap}};
+      {ok, {Id, Type, RefHash, {BabelMap, Spec}}};
     _ ->
       error
   end.
@@ -107,33 +104,23 @@ read(Id, Type, RefHash, Pid) ->
 read_by_hash_(_Hash, _Type, _C) ->
   error.
 
-insert_(Id, Type, RefHash, GrainETag, GrainState, Pid) when is_map(GrainState) ->
+insert_(Id, Type, RefHash, GrainETag, GrainState, Pid) ->
   update_(Id, Type, RefHash, GrainETag, GrainETag, GrainState, Pid).
 
-update_(Id, _Type, _RefHash, _OldGrainETag, _NewGrainETag, GrainState, Pid) when is_map(GrainState) ->
+update_(Id, _Type, _RefHash, _OldGrainETag, _NewGrainETag, _GrainState = {NewBabelMap, Spec}, Pid) ->
   IdBin = term_to_binary(Id),
-  case babel_get(IdBin, Pid) of
-    {ok, BabelMap0} ->
-      %% For now, shallow iteration.
-      BabelMap = maps:fold(fun(K, V, Acc) ->
-                             babel_map:set(K, V, Acc)
-                           end, BabelMap0, GrainState),
-
-      case babel_put(IdBin, BabelMap, Pid) of
-        ok ->
-          ok;
-        Error ->
-          {error, {"babel_put failure", Error}}
-      end;
+  case babel_put(IdBin, NewBabelMap, Spec, Pid) of
+    ok ->
+      ok;
     Error ->
-      {error, {"babel_get failure", Error}}
+      {error, {"babel_put failure", Error}}
   end.
 
-babel_get(IdBin, Pid) ->
-  babel:get({?TYPE, ?BUCKET}, IdBin, get_spec(), #{connection => Pid}).
+babel_get(IdBin, Spec, Pid) ->
+  babel:get({?TYPE, ?BUCKET}, IdBin, Spec, #{connection => Pid}).
 
-babel_put(IdBin, BabelMap, Pid) ->
-  babel:put({?TYPE, ?BUCKET}, IdBin, BabelMap, get_spec(), #{connection => Pid}).
+babel_put(IdBin, BabelMap, Spec, Pid) ->
+  babel:put({?TYPE, ?BUCKET}, IdBin, BabelMap, Spec, #{connection => Pid}).
 
 babel_get_socket() ->
   case persistent_term:get({?MODULE, pid}, undefined) of
@@ -166,9 +153,6 @@ port() ->
     Port ->
       Port
   end.
-
-get_spec() ->
-  ?SPEC.
 
 handle_call(_, _, State) ->
   {noreply, State}.
