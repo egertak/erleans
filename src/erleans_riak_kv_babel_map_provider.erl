@@ -22,6 +22,9 @@
 
 -include("erleans.hrl").
 
+-define(SPEC, #{<<"id">>    => {register, binary},
+                <<"state">> => {register, binary}}).
+
 enable_trace() ->
   dbg:stop_clear(),
   dbg:tracer(),
@@ -165,22 +168,7 @@ port() ->
   end.
 
 get_spec() ->
-  %%TBD where to store and get the spec from,
-  %%now let's hardcode something here
-  NotifSpec = #{
-    <<"push_notifications_enabled">> => {flag, boolean}
-  },
-  PrefSpec = #{
-    <<"notifications">> => {map, NotifSpec}
-  },
-  Spec = #{
-    <<"first_name">> => {register, binary},
-    <<"last_name">> => {register, binary},
-    <<"phone_number">> => {register, binary},
-    <<"age">> => {register, integer},
-    <<"preferences">> => {map, PrefSpec}},
-  Spec.
-
+  ?SPEC.
 
 handle_call(_, _, State) ->
   {noreply, State}.
